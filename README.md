@@ -16,8 +16,7 @@ A Quadtree is a tree data structure in which each internal node has exactly four
 ## Demo
 Included is a demonstration of the quadtree using SFML
 
-![plot](./src/demo.gif)
-![plot](./src/smiley.png)
+![](https://github.com/shujaK/Quadtree/blob/ec81499f8e841439d1894430f6272afad1335d93/demos/demo.gif)
 
 
 ## Requirements
