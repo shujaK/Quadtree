@@ -62,13 +62,12 @@ void printQuadtree(Quadtree<T>* qt, int level = 0)
     std::cout << "---------------------------------------------" << std::endl;
 }
 
-int main()
+int omain()
 {
     std::vector<sf::CircleShape> points;
 
     quad<float> b(vec2<float>(500, 500), 500);
     QuadtreeContainer<float>* qtc = new QuadtreeContainer<float>(b, 1);
-    Quadtree<float>* root = new Quadtree<float>(b, 1);
 
     for (int i = 0; i < 100; i++)
     {
@@ -129,8 +128,6 @@ int main()
 
         if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
         {
-            points.clear();
-            root = new Quadtree<float>(b, 1);
         }
 
         if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
@@ -142,10 +139,10 @@ int main()
                 p.setOrigin({ rad/2.0f, rad/2.0f });
                 p.setPosition((sf::Vector2f) mousePos);
                 points.push_back(p);
-                // justClicked = true;
+                justClicked = true;
 
                 vec2<float> qtp((float)mousePos.x, (float) mousePos.y);
-                // root->insert(qtp);
+                qtc->insert(qtp);
                 pCount++;
             }
         }
@@ -154,7 +151,7 @@ int main()
             justClicked = false;
         }
 
-        drawQuadTree(window, root);
+        drawQuadTree(window, qtc->getRoot());
 
         window.draw(queryCircle);
 
@@ -222,7 +219,7 @@ public:
 };
 
 // generating a new quadtree everytime with 10000 points: 14(+- 2) FPS, baseline 17 fps
-void omain()
+void main()
 {
     auto window = sf::RenderWindow{ { 1000, 1000 }, "Quadtree" };
     //window.setFramerateLimit(144);
@@ -243,9 +240,9 @@ void omain()
     font.loadFromFile("K:\\PROGRAM\\Projects\\cmake-sfml-project\\src\\cour.ttf");
 
     std::vector<particle> particles;
-    for (int i = 0; i < 10000; i++)
+    for (int i = 0; i < 100; i++)
     {
-        vec2<float> p(float(rand() % 1001), float(rand() % 1001));
+        vec2<float> p(float(rand() % 991), float(rand() % 991));
         vec2<float> v(float(((rand() % 11) - 5) / 10.0f), float(((rand() % 11) - 5) / 10.0f));
         v.normalize();
         particle pp(p, v);
@@ -255,7 +252,7 @@ void omain()
     std::vector<sf::CircleShape> queryPointDisplay;
 
     int counter = 0;
-    // Quadtree<float>* root = new Quadtree<float>(b, 1);
+    StaticQuadtree<float>* root;
     while (window.isOpen())
     {
         float dt = dClock.restart().asSeconds();
@@ -267,6 +264,8 @@ void omain()
             }
         }
 
+        root = new StaticQuadtree<float>(b, 1);
+
         window.clear();
 
         sf::Vector2i mousePos = sf::Mouse::getPosition(window);
@@ -277,14 +276,13 @@ void omain()
 
         for (auto& pt : particles)
         {
-            if (!windowRect.contains(pt.pos.x, pt.pos.y))
-            {
-                pt.velocity *= -1.0f;
-            }
+
+            if (pt.pos.x >= 990 || pt.pos.x <= 10) { pt.velocity.x *= -1.0f; }
+            if (pt.pos.y >= 990 || pt.pos.y <= 10) { pt.velocity.y *= -1.0f; }
 
             pt.pos += pt.velocity * (dt * 50);
 
-            // root->insert(pt.pos);
+            root->insert(pt.pos);
 
             sf::CircleShape p(2.0f, 16);
             p.setOrigin({ 1.0f, 1.0f });
