@@ -9,6 +9,7 @@ struct quad {
     T size;
 
     quad(vec2<T> _center, T _size) : center(_center), size(_size) {}
+    quad(quad<T>& _q) : center(_q.center), size(_q.size) {}
 
     bool quad::containsPoint(vec2<T> p)
     {

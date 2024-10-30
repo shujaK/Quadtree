@@ -11,9 +11,9 @@ void drawQuadTree(sf::RenderWindow& window, Quadtree<float>* root)
 
     rect.setOrigin(size / 2.0f);
     rect.setPosition(root->boundary.center.x, root->boundary.center.y);
-    rect.setFillColor(sf::Color::Black);
+    rect.setFillColor(sf::Color(0, 0, 0, 0));
     rect.setOutlineColor(sf::Color::White);
-    rect.setOutlineThickness(1);
+    rect.setOutlineThickness(0.5f);
 
     window.draw(rect);
 
@@ -67,12 +67,13 @@ int main()
     std::vector<sf::CircleShape> points;
 
     quad<float> b(vec2<float>(500, 500), 500);
+    QuadtreeContainer<float>* qtc = new QuadtreeContainer<float>(b, 1);
     Quadtree<float>* root = new Quadtree<float>(b, 1);
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
-        vec2<float> p(rand() % 1000, rand() % 1000);
-        root->insert(p);
+        vec2<float> p(static_cast<float>(rand() % 1000), static_cast<float>(rand() % 1000));
+        qtc->insert(p);
 
         float rad = 2.0f;
         sf::CircleShape pp(rad, 16);
@@ -102,8 +103,18 @@ int main()
     queryCircle.setOutlineThickness(1);
 
     bool justClicked = false;
+
+    int counter = 0;
+    float fsimTime = 0.0f;
+    sf::Clock dClock;
+
+    sf::Font font;
+    font.loadFromFile("K:\\PROGRAM\\Projects\\cmake-sfml-project\\src\\cour.ttf");
+
+    int pCount = 0;
     while (window.isOpen())
     {
+        float dt = dClock.restart().asSeconds();
         for (auto event = sf::Event{}; window.pollEvent(event);)
         {
             if (event.type == sf::Event::Closed)
@@ -134,7 +145,8 @@ int main()
                 // justClicked = true;
 
                 vec2<float> qtp((float)mousePos.x, (float) mousePos.y);
-                root->insert(qtp);
+                // root->insert(qtp);
+                pCount++;
             }
         }
         else
@@ -158,21 +170,161 @@ int main()
 
         queryPointDisplay.clear();
 
-        auto pointsv = root->queryCircle(cqueryCircle);
+        // auto pointsv = root->queryCircle(cqueryCircle);
 
-        for (const auto& vec2 : pointsv)
-        {
-            sf::CircleShape p(2.0f, 16);
-            p.setOrigin({ 1.0f, 1.0f });
-            p.setFillColor(sf::Color::Green);
-            p.setPosition({vec2.x, vec2.y});
-            queryPointDisplay.push_back(p);
-        }
+        // for (const auto& vec2 : pointsv)
+        // {
+        //     sf::CircleShape p(2.0f, 16);
+        //     p.setOrigin({ 1.0f, 1.0f });
+        //     p.setFillColor(sf::Color::Green);
+        //     p.setPosition({vec2.x, vec2.y});
+        //     queryPointDisplay.push_back(p);
+        // }
 
         for (const auto& vec2 : queryPointDisplay)
         {
             window.draw(vec2);
         }
+
+        counter++;
+        if (counter >= 10)
+        {
+            fsimTime = dt * 1000;
+            counter = 0;
+        }
+
+        // if (1000.0 / fsimTime <= 60)
+        // {
+        //     continue;
+        // }
+
+        std::string simTime = std::to_string(fsimTime) + "ms / " + std::to_string(1000.0 / fsimTime) + " fps" + "  Points: " + std::to_string(pCount);
+        sf::Text simTimeText(simTime, font);
+        window.draw(simTimeText);
+
+        window.display();
+    }
+
+    return 0;
+}
+
+class particle {
+public:
+    vec2<float> pos;
+    vec2<float> velocity;
+
+    particle()
+    {
+        pos = vec2<float>(0.0f, 0.0f);
+        velocity = vec2<float>(0.0f, 0.0f);
+    }
+    particle(vec2<float> p, vec2<float> v) : pos(p), velocity(v) {}
+};
+
+// generating a new quadtree everytime with 10000 points: 14(+- 2) FPS, baseline 17 fps
+void omain()
+{
+    auto window = sf::RenderWindow{ { 1000, 1000 }, "Quadtree" };
+    //window.setFramerateLimit(144);
+    sf::Rect windowRect(0, 0, 1000, 1000);
+    quad<float> b(vec2<float>(500, 500), 500);
+
+    sf::CircleShape queryCircle(100.0f);
+    queryCircle.setOrigin({ 100.0f, 100.0f });
+    queryCircle.setFillColor(sf::Color(0, 0, 0, 0));
+    queryCircle.setOutlineColor(sf::Color::Green);
+    queryCircle.setOutlineThickness(1);
+
+    float fsimTime = 0.0f;
+    float fsimTimeAvg = 0.0f;
+    sf::Clock dClock;
+
+    sf::Font font;
+    font.loadFromFile("K:\\PROGRAM\\Projects\\cmake-sfml-project\\src\\cour.ttf");
+
+    std::vector<particle> particles;
+    for (int i = 0; i < 10000; i++)
+    {
+        vec2<float> p(float(rand() % 1001), float(rand() % 1001));
+        vec2<float> v(float(((rand() % 11) - 5) / 10.0f), float(((rand() % 11) - 5) / 10.0f));
+        v.normalize();
+        particle pp(p, v);
+        particles.emplace_back(pp);
+    }
+
+    std::vector<sf::CircleShape> queryPointDisplay;
+
+    int counter = 0;
+    // Quadtree<float>* root = new Quadtree<float>(b, 1);
+    while (window.isOpen())
+    {
+        float dt = dClock.restart().asSeconds();
+        for (auto event = sf::Event{}; window.pollEvent(event);)
+        {
+            if (event.type == sf::Event::Closed)
+            {
+                window.close();
+            }
+        }
+
+        window.clear();
+
+        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+        queryCircle.setPosition((sf::Vector2f) mousePos);
+
+        window.draw(queryCircle);
+        circle<float> cqueryCircle(vec2<float>(queryCircle.getPosition().x, queryCircle.getPosition().y), 100.0f);
+
+        for (auto& pt : particles)
+        {
+            if (!windowRect.contains(pt.pos.x, pt.pos.y))
+            {
+                pt.velocity *= -1.0f;
+            }
+
+            pt.pos += pt.velocity * (dt * 50);
+
+            // root->insert(pt.pos);
+
+            sf::CircleShape p(2.0f, 16);
+            p.setOrigin({ 1.0f, 1.0f });
+            p.setFillColor(sf::Color::White);
+            p.setPosition({ pt.pos.x, pt.pos.y });
+            window.draw(p);
+        }
+
+        // drawQuadTree(window, root);
+
+        // auto pointsv = root->queryCircle(cqueryCircle);
+        // 
+        // queryPointDisplay.clear();
+        // for (const auto& vec2 : pointsv)
+        // {
+        //     sf::CircleShape p(2.0f, 16);
+        //     p.setOrigin({ 1.0f, 1.0f });
+        //     p.setFillColor(sf::Color::Green);
+        //     p.setPosition({ vec2.x, vec2.y });
+        //     queryPointDisplay.push_back(p);
+        // }
+        // 
+        // for (const auto& vec2 : queryPointDisplay)
+        // {
+        //     window.draw(vec2);
+        // }
+
+        counter++;
+        fsimTime += dt;
+        if (counter >= 50)
+        {
+            fsimTimeAvg = fsimTime * 20;
+            counter = 0;
+            fsimTime = 0;
+        }
+
+        std::string simTime = std::to_string(fsimTimeAvg) + "ms / " + std::to_string(1000.0 / fsimTimeAvg) + " fps";
+        sf::Text simTimeText(simTime, font);
+        window.draw(simTimeText);
+
         window.display();
     }
 }

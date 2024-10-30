@@ -3,141 +3,184 @@
 #include "quad.h"
 #include "circle.h"
 #include <vector>
+#include <list>
 
 template <typename T>
-struct Quadtree {
-	const int capacity;
-	int numPoints = 0;
-	vec2<T> *points;
+class Quadtree {
+public:
+    const int capacity;
+    int numPoints = 0;
 
-	quad<T> boundary;
+    using it = typename std::list<vec2<T>>::iterator;
+    it* points;
 
-	Quadtree<T>* tr = nullptr;
-	Quadtree<T>* tl = nullptr;
-	Quadtree<T>* br = nullptr;
-	Quadtree<T>* bl = nullptr;
+    quad<T> boundary;
 
-	Quadtree(quad<T> _boundary, const int _capacity) : boundary(_boundary), capacity(_capacity) 
-	{
-		points = new vec2<T>[_capacity];
-	}
+    Quadtree<T>* tr = nullptr;
+    Quadtree<T>* tl = nullptr;
+    Quadtree<T>* br = nullptr;
+    Quadtree<T>* bl = nullptr;
 
-	bool Quadtree::isLeaf()
-	{
-		return ((tr == nullptr) && (tl == nullptr) && (br == nullptr) && (bl == nullptr));
-	}
+    Quadtree(quad<T>& _boundary, const int _capacity) : boundary(_boundary), capacity(_capacity)
+    {
+        points = new it[_capacity];
+    }
 
-	bool Quadtree::subdivide()
-	{
-		T dSize = boundary.size / 2;
-		quad<T> tlBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y + dSize), dSize);
-		quad<T> trBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y + dSize), dSize);
-		quad<T> blBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y - dSize), dSize);
-		quad<T> brBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y - dSize), dSize);
+    ~Quadtree()
+    {
+        delete[] points;
+        delete tr;
+        delete tl;
+        delete br;
+        delete bl;
+    }
 
-		tr = new Quadtree<T>(trBoundary, capacity);
-		tl = new Quadtree<T>(tlBoundary, capacity);
-		br = new Quadtree<T>(brBoundary, capacity);
-		bl = new Quadtree<T>(blBoundary, capacity);
+    bool isLeaf()
+    {
+        return ((tr == nullptr) && (tl == nullptr) && (br == nullptr) && (bl == nullptr));
+    }
 
-		return true;
-	}
+    bool subdivide()
+    {
+        T dSize = boundary.size / 2;
+        quad<T> tlBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y + dSize), dSize);
+        quad<T> trBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y + dSize), dSize);
+        quad<T> blBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y - dSize), dSize);
+        quad<T> brBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y - dSize), dSize);
 
-	bool Quadtree::insert(vec2<T> p)
-	{
-		if (!boundary.containsPoint(p)) return false;
+        tr = new Quadtree<T>(trBoundary, capacity);
+        tl = new Quadtree<T>(tlBoundary, capacity);
+        br = new Quadtree<T>(brBoundary, capacity);
+        bl = new Quadtree<T>(blBoundary, capacity);
 
-		if (numPoints < capacity && this->isLeaf())
-		{
-			points[numPoints] = p;
-			numPoints++;
+        return true;
+    }
 
-			return true;
-		}
+    bool insert(it p)
+    {
+        if (!boundary.containsPoint(*p)) return false;
 
-		if (this->isLeaf())
-		{
-			this->subdivide();
-		}
+        if (numPoints < capacity && this->isLeaf())
+        {
+            points[numPoints] = p;
+            numPoints++;
+            return true;
+        }
 
-		if (tr->insert(p)) return true;
-		if (tl->insert(p)) return true;
-		if (br->insert(p)) return true;
-		if (bl->insert(p)) return true;
+        if (this->isLeaf())
+        {
+            this->subdivide();
+        }
 
-		return false;
-	}
-	std::vector<vec2<T>> Quadtree::query(quad<T> range)
-	{
-		std::vector<vec2<T>> allPoints;
+        if (tr->insert(p)) return true;
+        if (tl->insert(p)) return true;
+        if (br->insert(p)) return true;
+        if (bl->insert(p)) return true;
 
-		if (!boundary.intersectsQuad(range))
-		{
-			return allPoints;
-		}
-		else
-		{
-			for (int i = 0; i < numPoints; i++)
-			{
-				if (range.containsPoint(points[i]))
-				{
-					allPoints.push_back(points[i]);
-				}
-			}
-		}
+        return false;
+    }
 
-		if (!this->isLeaf())
-		{
-			auto vtr = tr->query(range);
-			allPoints.insert(allPoints.end(), vtr.begin(), vtr.end());
+    void queryRect(quad<T>& rect, std::list<it>& dest)
+    {
+        if (!boundary.intersectsQuad(rect)) { return; }
+        else
+        {
+            for (int i = 0; i < numPoints; i++)
+            {
+                if (rect.containsPoint(*points[i]))
+                {
+                    dest.push_back(points[i]);
+                }
+            }
+        }
 
-			auto vtl = tl->query(range);
-			allPoints.insert(allPoints.end(), vtl.begin(), vtl.end());
+        if (!this->isLeaf())
+        {
+            tr->queryRect(rect, dest);
+            tl->queryRect(rect, dest);
+            br->queryRect(rect, dest);
+            bl->queryRect(rect, dest);
+        }
+    }
 
-			auto vbr = br->query(range);
-			allPoints.insert(allPoints.end(), vbr.begin(), vbr.end());
+    void queryCircle(circle<T>& circle, std::list<it>& dest)
+    {
+        if (!boundary.intersectsCircle(circle)) { return; }
+        else
+        {
+            for (int i = 0; i < numPoints; i++)
+            {
+                if (circle.containsPoint(*points[i]))
+                {
+                    dest.push_back(points[i]);
+                }
+            }
+        }
 
-			auto vbl = bl->query(range);
-			allPoints.insert(allPoints.end(), vbl.begin(), vbl.end());
-		}
+        if (!this->isLeaf())
+        {
+            tr->queryCircle(circle, dest);
+            tl->queryCircle(circle, dest);
+            br->queryCircle(circle, dest);
+            bl->queryCircle(circle, dest);
+        }
+    }
+};
 
-		return allPoints;
-	}
+template <typename T>
+class QuadtreeContainer {
+    using container = std::list<vec2<T>>;
+    container allItems;
 
-	std::vector<vec2<T>> Quadtree::queryCircle(circle<T> circle)
-	{
-		std::vector<vec2<T>> allPoints;
+    using iterator = typename container::iterator;
 
-		if (!boundary.intersectsCircle(circle))
-		{
-			return allPoints;
-		}
-		else
-		{
-			for (int i = 0; i < numPoints; i++)
-			{
-				if (circle.containsPoint(points[i]))
-				{
-					allPoints.push_back(points[i]);
-				}
-			}
-		}
+    Quadtree<iterator> root;
 
-		if (!this->isLeaf())
-		{
-			auto vtr = tr->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vtr.begin(), vtr.end());
+public:
+    QuadtreeContainer(quad<T>& _boundary, const int _capacity) : root(_boundary, _capacity) {}
 
-			auto vtl = tl->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vtl.begin(), vtl.end());
+    size_t size()
+    {
+        return allItems.size();
+    }
 
-			auto vbr = br->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vbr.begin(), vbr.end());
+    iterator begin()
+    {
+        return allItems.begin();
+    }
 
-			auto vbl = bl->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vbl.begin(), vbl.end());
-		}
+    iterator end()
+    {
+        return allItems.end();
+    }
 
-		return allPoints;
-	}
+    typename container::const_iterator cbegin()
+    {
+        return allItems.cbegin();
+    }
+
+    typename container::const_iterator cend()
+    {
+        return allItems.cend();
+    }
+
+    void insert(vec2<T>& item)
+    {
+        allItems.push_back(item);
+        root.insert((iterator)std::prev(allItems.end()));
+    }
+
+    std::list<iterator> queryRect(quad<T>& rect)
+    {
+        std::list<iterator> itemPointers;
+        root.queryRect(rect, itemPointers);
+        return itemPointers;
+    }
+
+    std::list<iterator> queryCircle(circle<T>& circle)
+    {
+        std::list<iterator> itemPointers;
+        root.queryCircle(circle, itemPointers);
+        return itemPointers;
+    }
 };
