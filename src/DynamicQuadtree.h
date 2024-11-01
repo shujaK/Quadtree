@@ -35,8 +35,10 @@ public:
 	std::list<QItem<T>>* nodeItems;
 	quad<T> boundary;
 
-	QItem(typename std::list<QcItem<T>>::iterator _pQcItem, std::list<QItem<T>>* pni, const quad<T>& _boundary)
-		: pQcItem(_pQcItem), nodeItems(pni), boundary(_boundary) {}
+	DynamicQuadtree<T>* node;
+
+	QItem(typename std::list<QcItem<T>>::iterator _pQcItem, std::list<QItem<T>>* pni, const quad<T>& _boundary, DynamicQuadtree<T>* n)
+		: pQcItem(_pQcItem), nodeItems(pni), boundary(_boundary), node(n) {}
 
 };
 
@@ -85,8 +87,43 @@ public:
 
 	void remove(typename QcList::iterator pQCI)
 	{
+
+		DynamicQuadtree<T>* node = pQCI->pQItem->node;
+
 		std::list<QItem<T>>* currNodeItems = pQCI->pQItem->nodeItems;
 		currNodeItems->erase(pQCI->pQItem);
+
+		// Check if the current node is empty and handle the parent node's children pointers
+		while (node && node->items.empty())
+		{
+			DynamicQuadtree<T>* parent = node->parent;
+
+			if (parent)
+			{
+				if (parent->tr == node)
+				{
+					delete parent->tr;
+					parent->tr = nullptr;
+				}
+				else if (parent->tl == node)
+				{
+					delete parent->tl;
+					parent->tl = nullptr;
+				}
+				else if (parent->br == node)
+				{
+					delete parent->br;
+					parent->br = nullptr;
+				}
+				else if (parent->bl == node)
+				{
+					delete parent->bl;
+					parent->bl = nullptr;
+				}
+			}
+
+			node = parent;
+		}
 
 		allItems.erase(pQCI);
 	}
@@ -163,7 +200,7 @@ struct DynamicQuadtree {
 		if (isLeaf() && items.size() < capacity)
 		{
 			// There is space in this node
-			QItem<T> newItem(pQcItem, &items, boundary);
+			QItem<T> newItem(pQcItem, &items, boundary, this);
 			items.push_back(newItem);
 
 			auto it = --items.end();
