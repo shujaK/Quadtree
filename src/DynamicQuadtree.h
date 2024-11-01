@@ -22,17 +22,22 @@ public:
 	vec2<T> item;
 	typename std::list<QItem<T>>::iterator pQItem;
 
-
+	typename std::list<QcItem<T>>::iterator getIterator()
+	{
+		return pQItem->pQcItem;
+	}
 };
 
 template <typename T>
 class QItem {
 public:
 	typename std::list<QcItem<T>>::iterator pQcItem;
+	std::list<QItem<T>>* nodeItems;
 	quad<T> boundary;
 
-	QItem(typename std::list<QcItem<T>>::iterator _pQcItem, const quad<T>& _boundary)
-		: pQcItem(_pQcItem), boundary(_boundary) {}
+	QItem(typename std::list<QcItem<T>>::iterator _pQcItem, std::list<QItem<T>>* pni, const quad<T>& _boundary)
+		: pQcItem(_pQcItem), nodeItems(pni), boundary(_boundary) {}
+
 };
 
 // container
@@ -52,20 +57,45 @@ public:
 		newItem.item = item;
 
 		allItems.emplace_back(newItem);
+		auto it = std::prev(allItems.end());
+
 		// QcItem.pQItem = QItem
-		allItems.back().pQItem = root.insert(std::prev(allItems.end()));
+		auto result = root.insert(it);
+		if (!result.second)
+		{
+			// std::cout << "Failed to insert item into quadtree.\n";
+		}
+		else
+		{
+			allItems.back().pQItem = result.first;
+		}
 	}
 
-	std::list<vec2<T>> query(circle<T> range)
+	QcList query(circle<T> range)
 	{
-		std::list<vec2<T>> res;
+		QcList res;
 
 		for (auto& qci : root.query(range))
 		{
-			res.push_back(qci.item);
+			res.push_back(*qci);
 		}
 
 		return res;
+	}
+
+	void remove(typename QcList::iterator pQCI)
+	{
+		std::list<QItem<T>>* currNodeItems = pQCI->pQItem->nodeItems;
+		currNodeItems->erase(pQCI->pQItem);
+
+		allItems.erase(pQCI);
+	}
+
+	void remove(QcItem<T> item)
+	{
+		typename QcList::iterator pQCI = item.getIterator();
+
+		remove(pQCI);
 	}
 };
 
@@ -77,12 +107,13 @@ struct DynamicQuadtree {
 
 	quad<T> boundary;
 
+	DynamicQuadtree<T>* parent = nullptr;
 	DynamicQuadtree<T>* tr = nullptr;
 	DynamicQuadtree<T>* tl = nullptr;
 	DynamicQuadtree<T>* br = nullptr;
 	DynamicQuadtree<T>* bl = nullptr;
 
-	DynamicQuadtree(quad<T> _boundary, const int _capacity) : boundary(_boundary), capacity(_capacity){	}
+	DynamicQuadtree(quad<T> _boundary, const int _capacity) : boundary(_boundary), capacity(_capacity) {}
 
 	~DynamicQuadtree()
 	{
@@ -100,33 +131,43 @@ struct DynamicQuadtree {
 	bool subdivide()
 	{
 		T dSize = boundary.size / 2;
-		quad<T> tlBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y + dSize), dSize);
-		quad<T> trBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y + dSize), dSize);
-		quad<T> blBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y - dSize), dSize);
-		quad<T> brBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y - dSize), dSize);
 
+		quad<T> trBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y + dSize), dSize);
 		tr = new DynamicQuadtree<T>(trBoundary, capacity);
+		tr->parent = this;
+
+		quad<T> tlBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y + dSize), dSize);
 		tl = new DynamicQuadtree<T>(tlBoundary, capacity);
+		tl->parent = this;
+
+		quad<T> brBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y - dSize), dSize);
 		br = new DynamicQuadtree<T>(brBoundary, capacity);
+		br->parent = this;
+
+		quad<T> blBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y - dSize), dSize);
 		bl = new DynamicQuadtree<T>(blBoundary, capacity);
+		bl->parent = this;
+
 
 		return true;
 	}
 
-	typename std::list<QItem<T>>::iterator insert(typename std::list<QcItem<T>>::iterator pQcItem)
+	std::pair<typename std::list<QItem<T>>::iterator, bool> insert(typename std::list<QcItem<T>>::iterator pQcItem)
 	{
 		if (!boundary.containsPoint(pQcItem->item))
 		{
 			// The item is out of the boundary
-			throw std::out_of_range("Item out of boundary");
+			return { items.end(), false }; // Indicate failure
 		}
 
 		if (isLeaf() && items.size() < capacity)
 		{
 			// There is space in this node
-			QItem<T> newItem(pQcItem, boundary);
+			QItem<T> newItem(pQcItem, &items, boundary);
 			items.push_back(newItem);
-			return --items.end();
+
+			auto it = --items.end();
+			return { it, true };
 		}
 
 		if (isLeaf())
@@ -140,12 +181,15 @@ struct DynamicQuadtree {
 		else if (tl->boundary.containsPoint(pQcItem->item)) return tl->insert(pQcItem);
 		else if (br->boundary.containsPoint(pQcItem->item)) return br->insert(pQcItem);
 		else if (bl->boundary.containsPoint(pQcItem->item)) return bl->insert(pQcItem);
+
+		// If we reach here, something went wrong
+		return { items.end(), false }; // Indicate failure
 	}
 
-	std::list<QItem<T>> query(circle<T> range)
+	// a list of iterators that point to the corresponding Qcitems
+	std::list<typename std::list<QcItem<T>>::iterator> query(circle<T> range)
 	{
-		// SHOULD PASS QITEMS UP TO CONTAINER
-		std::list<QcItem<T>> res;
+		std::list<std::list<QcItem<T>>::iterator> res;
 
 		if (!boundary.intersectsCircle(range))
 		{
@@ -153,11 +197,11 @@ struct DynamicQuadtree {
 		}
 		else
 		{
-			for (QItem<T>& i: items)
+			for (QItem<T>& i : items)
 			{
 				if (range.containsPoint(i.pQcItem->item))
 				{
-					res.push_back(i.pQcItem->item);
+					res.push_back(i.pQcItem);
 				}
 			}
 		}

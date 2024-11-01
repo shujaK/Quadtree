@@ -4,8 +4,9 @@
 #include <stdlib.h>
 #include "StaticQuadtree.h"
 #include "DynamicQuadtree.h"
+#include <iostream>
 
-void drawQuadTree(sf::RenderWindow& window, StaticQuadtree<float>* root)
+void drawQuadTree(sf::RenderWindow& window, DynamicQuadtree<float>* root)
 {
     sf::Vector2f size(root->boundary.size * 2, root->boundary.size * 2); // Full width and height
     sf::RectangleShape rect(size);
@@ -101,18 +102,20 @@ void main()
         particles.emplace_back(pp);
     }
 
+    sf::CircleShape queryShape(50.0f, 32);
+    queryShape.setOrigin({ 50.0f, 50.0f });
+    queryShape.setFillColor(sf::Color(0, 0, 0, 0));
+    queryShape.setOutlineColor(sf::Color::Green);
+    queryShape.setOutlineThickness(1);
+
     int counter = 0;
     StaticQuadtree<float>* root = new StaticQuadtree(b, 1);
 
     ///////////////////
     Quadtree<float> dqt(b, 1);
-
-    dqt.insert(vec2<float>(200.0f, 150.0f));
-    dqt.insert(vec2<float>(200.0f, 151.0f));
-    dqt.insert(vec2<float>(200.0f, 152.0f));
-
-    auto res = dqt.query(circle<float>(vec2<float>(200.0f, 150.0f), 5.0f));
     //////////////////
+
+    bool clicked = false;
     while (window.isOpen())
     {
         float dt = dClock.restart().asSeconds();
@@ -125,29 +128,58 @@ void main()
         }
 
         window.clear();
-        root = new StaticQuadtree(b, 1);
 
         sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-
-        for (auto& pt : particles)
+        vec2<float> mp(mousePos.x, mousePos.y);
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
         {
+            if (!clicked)
+            {
+                vec2<float> p(float(mousePos.x), float(mousePos.y));
+                dqt.insert(p);
+                // clicked = true;
+            }
+        }
+        else { clicked = false; }
 
-            if (pt.pos.x >= 990 || pt.pos.x <= 10) { pt.velocity.x *= -1.0f; }
-            if (pt.pos.y >= 990 || pt.pos.y <= 10) { pt.velocity.y *= -1.0f; }
-
-            pt.pos += pt.velocity * (dt * 50);
-
+        for (auto& pt : dqt.allItems)
+        {
             sf::CircleShape p(2.0f, 16);
             p.setOrigin({ 1.0f, 1.0f });
             p.setFillColor(sf::Color::White);
-            p.setPosition({ pt.pos.x, pt.pos.y });
-
-            root->insert(pt.pos);
+            p.setPosition({ pt.item.x, pt.item.y });
 
             window.draw(p);
         }
 
-        drawQuadTree(window, root);
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
+        {
+            circle<float> queryCircle(mp, 50.0f);
+            auto queryResult = dqt.query(queryCircle);
+
+            for (auto& pt : queryResult)
+            {
+                dqt.remove(pt);
+            }
+        }
+
+        circle<float> queryCircle(mp, 50.0f);
+        auto queryResult = dqt.query(queryCircle);
+
+        for (auto& pt : queryResult)
+        {
+            sf::CircleShape p(2.0f, 16);
+            p.setOrigin({ 1.0f, 1.0f });
+            p.setFillColor(sf::Color::Green);
+            p.setPosition({ pt.item.x, pt.item.y });
+
+            window.draw(p);
+        }
+
+        queryShape.setPosition({ mp.x, mp.y });
+        window.draw(queryShape);
+
+        drawQuadTree(window, &dqt.root);
 
         counter++;
         fsimTime += dt;
@@ -163,6 +195,5 @@ void main()
         window.draw(simTimeText);
 
         window.display();
-        delete root;
     }
 }
