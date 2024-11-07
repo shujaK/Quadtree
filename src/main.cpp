@@ -41,6 +41,33 @@ void drawQuadTree(sf::RenderWindow& window, DynamicQuadtree<float>* root, sf::Ve
     }
 }
 
+void drawQuadtreeDebug(sf::RenderWindow& window, DynamicQuadtree<float>* root)
+{
+    if (root == nullptr)
+    {
+        return;
+    }
+
+    sf::Vector2f size(root->boundary.size * 2, root->boundary.size * 2); // Full width and height
+    sf::RectangleShape rect(size);
+
+    rect.setOrigin(size / 2.0f);
+    rect.setPosition(root->boundary.center.x, root->boundary.center.y);
+    rect.setFillColor(sf::Color(0, 0, 0, 0));
+    rect.setOutlineColor(sf::Color::White);
+    rect.setOutlineThickness(0.5f);
+
+    window.draw(rect);
+
+    if (!root->isLeaf())
+    {
+        if (root->tr != nullptr) drawQuadtreeDebug(window, root->tr);
+        if (root->tl != nullptr) drawQuadtreeDebug(window, root->tl);
+        if (root->br != nullptr) drawQuadtreeDebug(window, root->br);
+        if (root->bl != nullptr) drawQuadtreeDebug(window, root->bl);
+    }
+}
+
 template <typename T>
 void printQuadtree(StaticQuadtree<T>* qt, int level = 0)
 {
@@ -151,8 +178,8 @@ void main()
             if (!clicked)
             {
                 vec2<float> p(float(mousePos.x), float(mousePos.y));
-                dqt->insert2(p);
-                // clicked = true;
+                dqt->insert(p);
+                clicked = true;
             }
         }
         else { clicked = false; }
@@ -180,7 +207,7 @@ void main()
 
             for (auto& pt : queryResult)
             {
-                dqt->remove(pt);
+                dqt->remove(pt, window);
             }
         }
 
@@ -200,7 +227,7 @@ void main()
         queryShape.setPosition({ mp.x, mp.y });
         window.draw(queryShape);
 
-        // drawQuadTree(window, &dqt->root, vertexArray);
+        drawQuadTree(window, &dqt->root, vertexArray);
 
 		window.draw(vertexArray);
 

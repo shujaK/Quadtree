@@ -55,6 +55,11 @@ public:
 
 	void insert(vec2<T>& item)
 	{
+		if (!root.boundary.containsPoint(item))
+		{
+			return;
+		}
+
 		QcItem<T> newItem;
 		newItem.item = item;
 
@@ -63,26 +68,6 @@ public:
 
 		// QcItem.pQItem = QItem
 		auto result = root.insert(it);
-		if (!result.second)
-		{
-			// std::cout << "Failed to insert item into quadtree.\n";
-		}
-		else
-		{
-			allItems.back().pQItem = result.first;
-		}
-	}
-
-	void insert2(vec2<T>& item)
-	{
-		QcItem<T> newItem;
-		newItem.item = item;
-
-		allItems.emplace_back(newItem);
-		auto it = std::prev(allItems.end());
-
-		// QcItem.pQItem = QItem
-		auto result = root.insert2(it);
 		if (!result.second)
 		{
 			// std::cout << "Failed to insert item into quadtree.\n";
@@ -105,7 +90,7 @@ public:
 		return res;
 	}
 
-	void remove(typename QcList::iterator pQCI)
+	void remove(typename QcList::iterator pQCI, sf::RenderWindow& window)
 	{
 
 		DynamicQuadtree<T>* node = pQCI->pQItem->node;
@@ -113,46 +98,65 @@ public:
 		std::list<QItem<T>>* currNodeItems = pQCI->pQItem->nodeItems;
 		currNodeItems->erase(pQCI->pQItem);
 
-		// Check if the current node is empty and handle the parent node's children pointers
-		// while (node && node->items.empty())
-		// {
-		// 	DynamicQuadtree<T>* parent = node->parent;
-		// 
-		// 	if (parent)
-		// 	{
-		// 		if (parent->tr == node)
-		// 		{
-		// 			delete parent->tr;
-		// 			parent->tr = nullptr;
-		// 		}
-		// 		else if (parent->tl == node)
-		// 		{
-		// 			delete parent->tl;
-		// 			parent->tl = nullptr;
-		// 		}
-		// 		else if (parent->br == node)
-		// 		{
-		// 			delete parent->br;
-		// 			parent->br = nullptr;
-		// 		}
-		// 		else if (parent->bl == node)
-		// 		{
-		// 			delete parent->bl;
-		// 			parent->bl = nullptr;
-		// 		}
-		// 	}
-		// 
-		// 	node = parent;
-		// }
+		while (node->parent && node->parent->internal)
+		{
+			auto parent = node->parent;
+			int itemCount = 0;
+			if (parent->tr) itemCount += parent->tr->items.size();
+			if (parent->tl) itemCount += parent->tl->items.size();
+			if (parent->br) itemCount += parent->br->items.size();
+			if (parent->bl) itemCount += parent->bl->items.size();
+
+			if (itemCount <= parent->capacity)
+			{
+				parent->internal = false;
+				parent->items.clear();
+
+				if (parent->tr)
+				{
+					parent->items.insert(parent->items.end(), parent->tr->items.begin(), parent->tr->items.end());
+					delete parent->tr;
+					parent->tr = nullptr;
+					window.clear();
+					drawQuadtreeDebug(window, &root);
+				}
+				if (parent->tl)
+				{
+					parent->items.insert(parent->items.end(), parent->tl->items.begin(), parent->tl->items.end());
+					delete parent->tl;
+					parent->tl = nullptr;
+					window.clear();
+					drawQuadtreeDebug(window, &root);
+				}
+				if (parent->br)
+				{
+					parent->items.insert(parent->items.end(), parent->br->items.begin(), parent->br->items.end());
+					delete parent->br;
+					parent->br = nullptr;
+					window.clear();
+					drawQuadtreeDebug(window, &root);
+				}
+				if (parent->bl)
+				{
+					parent->items.insert(parent->items.end(), parent->bl->items.begin(), parent->bl->items.end());
+					delete parent->bl;
+					parent->bl = nullptr;
+					window.clear();
+					drawQuadtreeDebug(window, &root);
+				}
+
+				node = parent;
+			}
+		}
 
 		allItems.erase(pQCI);
 	}
 
-	void remove(QcItem<T> item)
+	void remove(QcItem<T> item, sf::RenderWindow& window)
 	{
 		typename QcList::iterator pQCI = item.getIterator();
 
-		remove(pQCI);
+		remove(pQCI, window);
 	}
 };
 
@@ -217,40 +221,6 @@ struct DynamicQuadtree {
 			return { items.end(), false }; // Indicate failure
 		}
 
-		if (isLeaf() && items.size() < capacity)
-		{
-			// There is space in this node
-			QItem<T> newItem(pQcItem, &items, boundary, this);
-			items.push_back(newItem);
-
-			auto it = --items.end();
-			return { it, true };
-		}
-
-		if (isLeaf())
-		{
-			// No space and this is a leaf node, so we subdivide
-			subdivide();
-		}
-
-		// Try to insert into the appropriate quadrant
-		if (tr->boundary.containsPoint(pQcItem->item)) return tr->insert(pQcItem);
-		else if (tl->boundary.containsPoint(pQcItem->item)) return tl->insert(pQcItem);
-		else if (br->boundary.containsPoint(pQcItem->item)) return br->insert(pQcItem);
-		else if (bl->boundary.containsPoint(pQcItem->item)) return bl->insert(pQcItem);
-
-		// If we reach here, something went wrong
-		return { items.end(), false }; // Indicate failure
-	}
-
-	std::pair<typename std::list<QItem<T>>::iterator, bool> insert2(typename std::list<QcItem<T>>::iterator pQcItem)
-	{
-		if (!boundary.containsPoint(pQcItem->item))
-		{
-			// The item is out of the boundary
-			return { items.end(), false }; // Indicate failure
-		}
-
 		if (isLeaf() && items.size() < capacity && !internal)
 		{
 			// There is space in this node
@@ -269,20 +239,20 @@ struct DynamicQuadtree {
 
 			for (auto& pt : items)
 			{
-				if (tr->boundary.containsPoint(pt.pQcItem->item)) tr->insert2(pt.pQcItem);
-				else if (tl->boundary.containsPoint(pt.pQcItem->item)) tl->insert2(pt.pQcItem);
-				else if (br->boundary.containsPoint(pt.pQcItem->item)) br->insert2(pt.pQcItem);
-				else if (bl->boundary.containsPoint(pt.pQcItem->item)) bl->insert2(pt.pQcItem);
+				if (tr->boundary.containsPoint(pt.pQcItem->item)) tr->insert(pt.pQcItem);
+				else if (tl->boundary.containsPoint(pt.pQcItem->item)) tl->insert(pt.pQcItem);
+				else if (br->boundary.containsPoint(pt.pQcItem->item)) br->insert(pt.pQcItem);
+				else if (bl->boundary.containsPoint(pt.pQcItem->item)) bl->insert(pt.pQcItem);
 			}
 
 			items.clear();
 		}
 
 		// Try to insert into the appropriate quadrant
-		if (tr->boundary.containsPoint(pQcItem->item)) return tr->insert2(pQcItem);
-		else if (tl->boundary.containsPoint(pQcItem->item)) return tl->insert2(pQcItem);
-		else if (br->boundary.containsPoint(pQcItem->item)) return br->insert2(pQcItem);
-		else if (bl->boundary.containsPoint(pQcItem->item)) return bl->insert2(pQcItem);
+		if (tr->boundary.containsPoint(pQcItem->item)) return tr->insert(pQcItem);
+		else if (tl->boundary.containsPoint(pQcItem->item)) return tl->insert(pQcItem);
+		else if (br->boundary.containsPoint(pQcItem->item)) return br->insert(pQcItem);
+		else if (bl->boundary.containsPoint(pQcItem->item)) return bl->insert(pQcItem);
 
 		// If we reach here, something went wrong
 		return { items.end(), false }; // Indicate failure
@@ -296,16 +266,6 @@ struct DynamicQuadtree {
 		if (!boundary.intersectsCircle(range))
 		{
 			return res;
-		}
-		else
-		{
-			for (QItem<T>& i : items)
-			{
-				if (range.containsPoint(i.pQcItem->item))
-				{
-					res.push_back(i.pQcItem);
-				}
-			}
 		}
 
 		if (!this->isLeaf())
@@ -323,156 +283,18 @@ struct DynamicQuadtree {
 			res.insert(res.end(), vbl.begin(), vbl.end());
 		}
 
+		if (!internal)
+		{
+			for (auto& item : items)
+			{
+				if (range.containsPoint(item.pQcItem->item))
+				{
+					res.push_back(item.pQcItem);
+				}
+			}
+		}
+
 		return res;
 	}
 
-};
-
-
-template <typename T>
-struct aStaticQuadtree {
-	const int capacity;
-	int numPoints = 0;
-	vec2<T>* points;
-
-	quad<T> boundary;
-
-	aStaticQuadtree<T>* tr = nullptr;
-	aStaticQuadtree<T>* tl = nullptr;
-	aStaticQuadtree<T>* br = nullptr;
-	aStaticQuadtree<T>* bl = nullptr;
-
-	aStaticQuadtree(quad<T> _boundary, const int _capacity) : boundary(_boundary), capacity(_capacity)
-	{
-		points = new vec2<T>[_capacity];
-	}
-
-	~aStaticQuadtree()
-	{
-		delete[] points;
-
-		delete tr;
-		delete tl;
-		delete br;
-		delete bl;
-	}
-
-	bool aStaticQuadtree::isLeaf()
-	{
-		return ((tr == nullptr) && (tl == nullptr) && (br == nullptr) && (bl == nullptr));
-	}
-
-	bool aStaticQuadtree::subdivide()
-	{
-		T dSize = boundary.size / 2;
-		quad<T> tlBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y + dSize), dSize);
-		quad<T> trBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y + dSize), dSize);
-		quad<T> blBoundary(vec2<T>(boundary.center.x - dSize, boundary.center.y - dSize), dSize);
-		quad<T> brBoundary(vec2<T>(boundary.center.x + dSize, boundary.center.y - dSize), dSize);
-
-		tr = new aStaticQuadtree<T>(trBoundary, capacity);
-		tl = new aStaticQuadtree<T>(tlBoundary, capacity);
-		br = new aStaticQuadtree<T>(brBoundary, capacity);
-		bl = new aStaticQuadtree<T>(blBoundary, capacity);
-
-		return true;
-	}
-
-	bool aStaticQuadtree::insert(vec2<T> p)
-	{
-		if (!boundary.containsPoint(p)) return false;
-
-		if (numPoints < capacity && this->isLeaf())
-		{
-			points[numPoints] = p;
-			numPoints++;
-
-			return true;
-		}
-
-		if (this->isLeaf())
-		{
-			this->subdivide();
-		}
-
-		if (tr->insert(p)) return true;
-		if (tl->insert(p)) return true;
-		if (br->insert(p)) return true;
-		if (bl->insert(p)) return true;
-
-		return false;
-	}
-	std::vector<vec2<T>> aStaticQuadtree::query(quad<T> range)
-	{
-		std::vector<vec2<T>> allPoints;
-
-		if (!boundary.intersectsQuad(range))
-		{
-			return allPoints;
-		}
-		else
-		{
-			for (int i = 0; i < numPoints; i++)
-			{
-				if (range.containsPoint(points[i]))
-				{
-					allPoints.push_back(points[i]);
-				}
-			}
-		}
-
-		if (!this->isLeaf())
-		{
-			auto vtr = tr->query(range);
-			allPoints.insert(allPoints.end(), vtr.begin(), vtr.end());
-
-			auto vtl = tl->query(range);
-			allPoints.insert(allPoints.end(), vtl.begin(), vtl.end());
-
-			auto vbr = br->query(range);
-			allPoints.insert(allPoints.end(), vbr.begin(), vbr.end());
-
-			auto vbl = bl->query(range);
-			allPoints.insert(allPoints.end(), vbl.begin(), vbl.end());
-		}
-
-		return allPoints;
-	}
-
-	std::vector<vec2<T>> aStaticQuadtree::queryCircle(circle<T> circle)
-	{
-		std::vector<vec2<T>> allPoints;
-
-		if (!boundary.intersectsCircle(circle))
-		{
-			return allPoints;
-		}
-		else
-		{
-			for (int i = 0; i < numPoints; i++)
-			{
-				if (circle.containsPoint(points[i]))
-				{
-					allPoints.push_back(points[i]);
-				}
-			}
-		}
-
-		if (!this->isLeaf())
-		{
-			auto vtr = tr->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vtr.begin(), vtr.end());
-
-			auto vtl = tl->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vtl.begin(), vtl.end());
-
-			auto vbr = br->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vbr.begin(), vbr.end());
-
-			auto vbl = bl->queryCircle(circle);
-			allPoints.insert(allPoints.end(), vbl.begin(), vbl.end());
-		}
-
-		return allPoints;
-	}
 };
