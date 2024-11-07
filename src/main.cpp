@@ -6,7 +6,7 @@
 #include "DynamicQuadtree.h"
 #include <iostream>
 
-void drawQuadTree(sf::RenderWindow& window, DynamicQuadtree<float>* root)
+void drawQuadTree(sf::RenderWindow& window, DynamicQuadtree<float>* root, sf::VertexArray& vertexArray)
 {
     sf::Vector2f size(root->boundary.size * 2, root->boundary.size * 2); // Full width and height
     sf::RectangleShape rect(size);
@@ -17,14 +17,27 @@ void drawQuadTree(sf::RenderWindow& window, DynamicQuadtree<float>* root)
     rect.setOutlineColor(sf::Color::White);
     rect.setOutlineThickness(0.5f);
 
-    window.draw(rect);
+    // Add rectangle vertices to the vertex array
+    sf::Vector2f topLeft = rect.getTransform().transformPoint(0, 0);
+    sf::Vector2f topRight = rect.getTransform().transformPoint(size.x, 0);
+    sf::Vector2f bottomRight = rect.getTransform().transformPoint(size.x, size.y);
+    sf::Vector2f bottomLeft = rect.getTransform().transformPoint(0, size.y);
+
+    vertexArray.append(sf::Vertex(topLeft, sf::Color::White));
+    vertexArray.append(sf::Vertex(bottomLeft, sf::Color::White));
+    vertexArray.append(sf::Vertex(topRight, sf::Color::White));
+    vertexArray.append(sf::Vertex(bottomRight, sf::Color::White));
+    vertexArray.append(sf::Vertex(bottomLeft, sf::Color::White));
+    vertexArray.append(sf::Vertex(bottomRight, sf::Color::White));
+    vertexArray.append(sf::Vertex(topLeft, sf::Color::White));
+    vertexArray.append(sf::Vertex(topRight, sf::Color::White));
 
     if (!root->isLeaf())
     {
-        if (root->tr != nullptr) drawQuadTree(window, root->tr);
-        if (root->tl != nullptr) drawQuadTree(window, root->tl);
-        if (root->br != nullptr) drawQuadTree(window, root->br);
-        if (root->bl != nullptr) drawQuadTree(window, root->bl);
+        if (root->tr != nullptr) drawQuadTree(window, root->tr, vertexArray);
+        if (root->tl != nullptr) drawQuadTree(window, root->tl, vertexArray);
+        if (root->br != nullptr) drawQuadTree(window, root->br, vertexArray);
+        if (root->bl != nullptr) drawQuadTree(window, root->bl, vertexArray);
     }
 }
 
@@ -112,10 +125,12 @@ void main()
     StaticQuadtree<float>* root = new StaticQuadtree(b, 1);
 
     ///////////////////
-    Quadtree<float> dqt(b, 1);
+    Quadtree<float>* dqt = new Quadtree<float>(b, 1);
     //////////////////
 
     bool clicked = false;
+
+    sf::VertexArray vertexArray(sf::Lines);
     while (window.isOpen())
     {
         float dt = dClock.restart().asSeconds();
@@ -136,13 +151,19 @@ void main()
             if (!clicked)
             {
                 vec2<float> p(float(mousePos.x), float(mousePos.y));
-                dqt.insert(p);
+                dqt->insert2(p);
                 // clicked = true;
             }
         }
         else { clicked = false; }
 
-        for (auto& pt : dqt.allItems)
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::R))
+		{
+			delete dqt;
+			dqt = new Quadtree<float>(b, 1);
+		}
+
+        for (auto& pt : dqt->allItems)
         {
             sf::CircleShape p(2.0f, 16);
             p.setOrigin({ 1.0f, 1.0f });
@@ -155,16 +176,16 @@ void main()
         if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
         {
             circle<float> queryCircle(mp, 50.0f);
-            auto queryResult = dqt.query(queryCircle);
+            auto queryResult = dqt->query(queryCircle);
 
             for (auto& pt : queryResult)
             {
-                dqt.remove(pt);
+                dqt->remove(pt);
             }
         }
 
         circle<float> queryCircle(mp, 50.0f);
-        auto queryResult = dqt.query(queryCircle);
+        auto queryResult = dqt->query(queryCircle);
 
         for (auto& pt : queryResult)
         {
@@ -179,7 +200,11 @@ void main()
         queryShape.setPosition({ mp.x, mp.y });
         window.draw(queryShape);
 
-        drawQuadTree(window, &dqt.root);
+        // drawQuadTree(window, &dqt->root, vertexArray);
+
+		window.draw(vertexArray);
+
+		vertexArray.clear();
 
         counter++;
         fsimTime += dt;
